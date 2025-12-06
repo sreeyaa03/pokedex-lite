@@ -19,13 +19,15 @@ export const authOptions: NextAuthOptions = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id;
+        // `user` may not have id typed in NextAuth default types — use a safe cast
+        (token as any).id = (user as any).id;
       }
       return token;
     },
     async session({ session, token }) {
       if (session.user) {
-        session.user.id = token.id as string;
+        // session.user type doesn't include `id` by default; cast to any to attach it
+        (session.user as any).id = (token as any).id as string;
       }
       return session;
     },
