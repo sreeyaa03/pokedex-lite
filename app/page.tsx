@@ -1,65 +1,139 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { usePokemons } from "@/hooks/usePokemons";
+import PokemonCard from "@/components/PokemonCard";
+import PokemonModal from "@/components/PokemonModal";
+import { fetchPokemonTypes } from "@/lib/pokeapi";
+import { useFavorites } from "@/context/FavoritesContext";
+
+export default function HomePage() {
+  const {
+    pokemons,
+    isLoading,
+    error,
+    page,
+    limit,
+    total,
+    query,
+    setQuery,
+    selectedType,
+    setSelectedType,
+    nextPage,
+    prevPage,
+  } = usePokemons(20);
+
+  const [selectedPokemon, setSelectedPokemon] = useState<any>(null);
+  const [types, setTypes] = useState<string[]>([]);
+  const { favorites } = useFavorites();
+  const [showFavorites, setShowFavorites] = useState(false);
+
+  useEffect(() => {
+    fetchPokemonTypes().then(setTypes).catch(() => setTypes([]));
+  }, []);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="p-6">
+      <h1 className="text-3xl font-bold mb-4">Pokedex Lite</h1>
+
+      <div className="flex flex-col sm:flex-row gap-4 mb-4 items-start">
+        <input
+          className="border p-2 rounded w-full sm:w-64"
+          placeholder="Search by name..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={{ background: "var(--card-bg)", color: "var(--foreground)", borderColor: "rgba(0,0,0,0.12)" }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+
+        <select
+          className="border p-2 rounded"
+          value={selectedType || ""}
+          onChange={(e) => setSelectedType(e.target.value || null)}
+          style={{ background: "var(--card-bg)", color: "var(--foreground)", borderColor: "rgba(0,0,0,0.12)" }}
+        >
+          <option value="">All types</option>
+          {types.map((t) => (
+            <option key={t} value={t} className="capitalize">
+              {t}
+            </option>
+          ))}
+        </select>
+        <button
+          className="px-4 py-2 border rounded text-sm hover:opacity-80 transition"
+          onClick={() => {
+            setQuery("");
+            setSelectedType(null);
+            setShowFavorites(false);
+          }}
+          style={{ background: "var(--card-bg)", color: "var(--foreground)", borderColor: "rgba(0,0,0,0.12)" }}
+        >
+          Clear Filters
+        </button>
+        <label className="flex items-center gap-2 ml-auto text-sm">
+          <input
+            type="checkbox"
+            checked={showFavorites}
+            onChange={(e) => setShowFavorites(e.target.checked)}
+            aria-label="Show favorites only"
+            style={{ accentColor: "#facc15" }}
+          />
+          <span>Favorites</span>
+        </label>
+
+        <div className="ml-2 text-sm">
+          Page: {page + 1} / {Math.ceil(total / limit) || 1}
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </div>
+
+      {isLoading && (
+        <div className="flex items-center justify-center py-12 text-xl">
+          Loading Pokémons...
         </div>
-      </main>
+      )}
+
+      {error && (
+        <div className="text-red-500">Error loading pokémons: {error}</div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+        {(showFavorites
+          ? pokemons.filter((p) => favorites.includes(p.id))
+          : pokemons
+        ).map((pokemon) => (
+          <PokemonCard
+            key={pokemon.id}
+            pokemon={pokemon}
+            onClick={() => setSelectedPokemon(pokemon)}
+          />
+        ))}
+      </div>
+
+      <div className="flex justify-center gap-4 mt-6">
+        <button
+          className="px-4 py-2 border rounded disabled:opacity-50"
+          onClick={prevPage}
+          disabled={page === 0}
+          style={{ background: "var(--card-bg)", color: "var(--foreground)", borderColor: "rgba(0,0,0,0.12)" }}
+        >
+          Previous
+        </button>
+        <button
+          className="px-4 py-2 border rounded disabled:opacity-50"
+          onClick={nextPage}
+          disabled={(page + 1) * limit >= total}
+          style={{ background: "var(--card-bg)", color: "var(--foreground)", borderColor: "rgba(0,0,0,0.12)" }}
+        >
+          Next
+        </button>
+      </div>
+
+      {selectedPokemon && (
+        <PokemonModal
+          pokemon={selectedPokemon}
+          onClose={() => setSelectedPokemon(null)}
+        />
+      )}
     </div>
   );
 }
+
