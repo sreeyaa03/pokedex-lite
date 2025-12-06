@@ -1,6 +1,11 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Pokemon } from "@/types/Pokemon";
-import { fetchPokemons } from "@/lib/pokeapi";
+import {
+  fetchPokemons,
+  fetchAllPokemonList,
+  fetchManyByNames,
+  fetchPokemonNamesByType,
+} from "@/lib/pokeapi";
 
 export const usePokemons = (initialLimit = 20) => {
   const [pokemons, setPokemons] = useState<Pokemon[]>([]);
@@ -11,24 +16,63 @@ export const usePokemons = (initialLimit = 20) => {
   const [total, setTotal] = useState(0);
   const [query, setQuery] = useState("");
   const [selectedType, setSelectedType] = useState<string | null>(null);
+  const allNamesCache = useRef<{ name: string; url: string }[] | null>(null);
 
-  const load = useCallback(async () => {
+  const fetchData = async (pageArg: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const { pokemons: data, count } = await fetchPokemons(page, limit);
-      setTotal(count);
-      setPokemons(data);
+      // If user is searching or filtering by type, perform global matching then paginate
+      if (query || selectedType) {
+        let matchedNames: { name: string; url: string }[] = [];
+
+        if (selectedType) {
+          matchedNames = await fetchPokemonNamesByType(selectedType);
+        } else {
+          if (!allNamesCache.current) {
+            allNamesCache.current = await fetchAllPokemonList();
+          }
+          matchedNames = allNamesCache.current as { name: string; url: string }[];
+        }
+
+        if (query) {
+          const q = query.toLowerCase();
+          matchedNames = matchedNames.filter((m) => m.name.toLowerCase().includes(q));
+        }
+
+        setTotal(matchedNames.length);
+
+        const start = pageArg * limit;
+        const slice = matchedNames.slice(start, start + limit).map((m) => m.name);
+        const data = await fetchManyByNames(slice);
+        setPokemons(data);
+      } else {
+        const { pokemons: data, count } = await fetchPokemons(pageArg, limit);
+        setTotal(count);
+        setPokemons(data);
+      }
     } catch (e: any) {
       setError(e.message || "Unknown error");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Fetch when page or limit changes
+  useEffect(() => {
+    fetchData(page);
   }, [page, limit]);
 
+  // When query or selectedType change, reset to page 0 and fetch page 0.
   useEffect(() => {
-    load();
-  }, [load]);
+    // If we're already at page 0, just fetch. Otherwise set page to 0 and
+    // the other effect will fetch when `page` updates.
+    if (page === 0) {
+      fetchData(0);
+    } else {
+      setPage(0);
+    }
+  }, [query, selectedType]);
 
   const filtered = pokemons.filter((p) => {
     const matchesQuery = p.name.toLowerCase().includes(query.toLowerCase());
@@ -55,6 +99,6 @@ export const usePokemons = (initialLimit = 20) => {
     nextPage,
     prevPage,
     goToPage,
-    reload: load,
+    reload: () => fetchData(page),
   };
 };
